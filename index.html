@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACC Results Viewer - Análise Histórica de Corridas (Race)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 font-sans antialiased">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-5 gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl md:text-3xl font-bold text-sky-400 tracking-tight">ACC Results Viewer</h1>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            Filtro: Apenas Corridas (Race / R)
+          </span>
+        </div>
+        <p class="text-slate-400 text-sm mt-1">Análise histórica e ranking focado exclusivamente em sessões de corrida</p>
+      </div>
+
+      <!-- Controles de Carregamento de Arquivos -->
+      <div class="flex flex-wrap items-center gap-3">
+        <button onclick="loadFromDataFolder()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-all shadow-lg shadow-emerald-600/20 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Recarregar /data
+        </button>
+
+        <label class="cursor-pointer bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm px-4 py-2.5 rounded-lg transition-all shadow-lg shadow-sky-600/20 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          Carregar Manual (.JSON)
+          <input type="file" id="fileInput" accept=".json" multiple class="hidden" onchange="handleFilesSelect(event)">
+        </label>
+        
+        <button onclick="clearData()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm px-4 py-2.5 rounded-lg transition border border-slate-700">
+          Limpar Tudo
+        </button>
+      </div>
+    </header>
+
+    <!-- Status do Carregamento Automático -->
+    <div id="statusMessage" class="hidden text-xs px-4 py-2 rounded-lg border"></div>
+
+    <!-- Resumo Histórico das Sessões -->
+    <div id="historyStats" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
+        <p class="text-xs uppercase font-semibold text-slate-400">Corridas Processadas</p>
+        <p class="text-2xl font-bold text-white mt-0.5" id="totalFiles">0</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase font-semibold text-slate-400">Total de Pilotos Ativos</p>
+        <p class="text-2xl font-bold text-sky-400 mt-0.5" id="totalDrivers">0</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase font-semibold text-slate-400">Total de Voltas Registradas</p>
+        <p class="text-2xl font-bold text-amber-400 mt-0.5" id="totalLapsCount">0</p>
+      </div>
+      <div>
+        <p class="text-xs uppercase font-semibold text-slate-400">Melhor Volta Geral (Race)</p>
+        <p class="text-2xl font-bold text-emerald-400 mt-0.5" id="overallBestLap">--</p>
+      </div>
+    </div>
+
+    <!-- Lista Retrátil de Sessões Carregadas e Ignoradas -->
+    <details class="group bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-5 space-y-3">
+      <summary class="cursor-pointer list-none flex items-center justify-between font-semibold text-slate-300 hover:text-sky-400 transition">
+        <span class="flex items-center gap-2 text-sm uppercase tracking-wider">
+          🏁 Corridas Carregadas e Detalhes de Arquivos
+        </span>
+        <svg class="w-5 h-5 transform group-open:rotate-180 transition-transform text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </summary>
+      
+      <div class="pt-3 space-y-3 border-t border-slate-800/80 mt-3">
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sessões Válidas</h3>
+          <div id="sessionsList" class="flex flex-wrap gap-2 text-xs">
+            <span class="text-slate-500 italic">Nenhuma corrida válida carregada.</span>
+          </div>
+        </div>
+        <div id="ignoredContainer" class="hidden border-t border-slate-800/80 pt-3">
+          <h3 class="text-xs font-semibold text-amber-500/80 uppercase tracking-wider mb-2">⚠️ Arquivos Ignorados (Não são Corridas)</h3>
+          <div id="ignoredList" class="flex flex-wrap gap-2 text-xs"></div>
+        </div>
+      </div>
+    </details>
+
+    <!-- Seção Global de Seleção de Pilotos (Filtro para até 4 Pilotos) -->
+    <section class="bg-slate-900/90 backdrop-blur-md rounded-2xl border border-sky-500/30 p-5 shadow-lg shadow-sky-950/20">
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div>
+          <h3 class="text-base font-bold text-sky-400 flex items-center gap-2">
+            🎯 Filtro de Pilotos (Até 4 Pilotos Selecionados)
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">Selecione até 4 pilotos para filtrar simultaneamente os gráficos de Evolução por Sessão e Ritmo Volta a Volta</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <div class="flex flex-col">
+            <label class="text-[10px] uppercase font-semibold text-slate-400">Piloto 1</label>
+            <select id="driverSelect1" onchange="onDriverFilterChange()" class="bg-slate-950 text-sky-400 font-medium border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500 min-w-[130px]">
+              <option value="">Nenhum</option>
+            </select>
+          </div>
+          <div class="flex flex-col">
+            <label class="text-[10px] uppercase font-semibold text-slate-400">Piloto 2</label>
+            <select id="driverSelect2" onchange="onDriverFilterChange()" class="bg-slate-950 text-amber-400 font-medium border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500 min-w-[130px]">
+              <option value="">Nenhum</option>
+            </select>
+          </div>
+          <div class="flex flex-col">
+            <label class="text-[10px] uppercase font-semibold text-slate-400">Piloto 3</label>
+            <select id="driverSelect3" onchange="onDriverFilterChange()" class="bg-slate-950 text-emerald-400 font-medium border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-emerald-500 min-w-[130px]">
+              <option value="">Nenhum</option>
+            </select>
+          </div>
+          <div class="flex flex-col">
+            <label class="text-[10px] uppercase font-semibold text-slate-400">Piloto 4</label>
+            <select id="driverSelect4" onchange="onDriverFilterChange()" class="bg-slate-950 text-purple-400 font-medium border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500 min-w-[130px]">
+              <option value="">Nenhum</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabela de Ranking Histórico Acumulado -->
+    <section class="bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-sm">
+      <h2 class="text-xl font-bold text-slate-200 mb-4 flex items-center gap-2">
+        🏆 Ranking Geral / Melhores Voltas em Corridas
+      </h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="text-xs text-slate-400 uppercase bg-slate-950/60 border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4">Pos</th>
+              <th class="py-3 px-4">Piloto</th>
+              <th class="py-3 px-4">Corridas Participadas</th>
+              <th class="py-3 px-4">Total de Voltas</th>
+              <th class="py-3 px-4">Melhor Volta em Corrida</th>
+              <th class="py-3 px-4">Média de Volta</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <tr>
+              <td colspan="6" class="text-center py-6 text-slate-500">Nenhum arquivo de corrida carregado.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Gráfico 1: Evolução da Melhor Volta por Sessão -->
+    <section class="bg-slate-900/80 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-sm space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-200">📈 Evolução dos Tempos de Corrida Por Sessão</h2>
+          <p class="text-xs text-slate-400 mt-1">Comparativo da melhor volta de cada piloto selecionado ao longo das corridas</p>
+        </div>
+      </div>
+      <div class="h-80">
+        <canvas id="lapsChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Gráfico 2: Evolução Volta a Volta por Sessão (Filtrado pelos Pilotos Selecionados) -->
+    <section class="bg-slate-900/80 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-sm space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-200">⏱️ Análise Ritmo Volta a Volta na Sessão</h2>
+          <p class="text-xs text-slate-400 mt-1">Tempo de cada volta na corrida selecionada (filtrado pelos pilotos ativos no topo)</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <label for="sessionSelect" class="text-xs font-semibold text-slate-400 uppercase">Sessão:</label>
+          <select id="sessionSelect" onchange="updateLapByLapChart()" class="bg-slate-950 text-sky-400 text-xs font-medium border border-slate-700 rounded-lg px-3 py-2 focus:outline-none focus:border-sky-500">
+            <option value="">Nenhuma corrida carregada</option>
+          </select>
+        </div>
+      </div>
+      <div class="h-96">
+        <canvas id="lapByLapChart"></canvas>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    let lapsChart;
+    let lapByLapChart;
+    let loadedSessions = [];
+    let ignoredFiles = [];
+    let driverHistoryChartGlobal = {};
+    let activeDriversGlobal = [];
+    let sortedDriversGlobal = [];
+    let driversMapGlobal = {};
+
+    const colorMap = {
+      0: '#38bdf8', // Azul Sky para Piloto 1
+      1: '#f59e0b', // Amarelo Amber para Piloto 2
+      2: '#10b981', // Verde Emerald para Piloto 3
+      3: '#c084fc'  // Roxo Purple para Piloto 4
+    };
+
+    const highlightClassMap = {
+      0: 'bg-sky-500/10 border-l-4 border-l-sky-400',
+      1: 'bg-amber-500/10 border-l-4 border-l-amber-400',
+      2: 'bg-emerald-500/10 border-l-4 border-l-emerald-400',
+      3: 'bg-purple-500/10 border-l-4 border-l-purple-400'
+    };
+
+    const DEFAULT_DRIVERS = ["Erick Nogueira", "Leandro Sc", "João Marcos"];
+
+    function showStatus(message, isError = false) {
+      const el = document.getElementById('statusMessage');
+      el.classList.remove('hidden', 'bg-emerald-950/50', 'border-emerald-800', 'text-emerald-300', 'bg-rose-950/50', 'border-rose-800', 'text-rose-300');
+      if (isError) {
+        el.classList.add('bg-rose-950/50', 'border-rose-800', 'text-rose-300');
+      } else {
+        el.classList.add('bg-emerald-950/50', 'border-emerald-800', 'text-emerald-300');
+      }
+      el.innerText = message;
+    }
+
+    // Leitura Automática da pasta /data via index.json
+    async function loadFromDataFolder() {
+      showStatus("🔎 Procurando arquivos na pasta /data...");
+      try {
+        const response = await fetch('./data/index.json');
+        if (!response.ok) throw new Error("Não foi possível carregar o arquivo './data/index.json'.");
+        
+        const fileNames = await response.json();
+        if (!Array.isArray(fileNames) || fileNames.length === 0) {
+          showStatus("⚠️ O arquivo './data/index.json' está vazio.", true);
+          return;
+        }
+
+        loadedSessions = [];
+        ignoredFiles = [];
+
+        const fetchPromises = fileNames.map(async (fileName) => {
+          try {
+            const res = await fetch(`./data/${fileName}`);
+            if (!res.ok) return null;
+            const text = await res.text();
+            const cleanText = cleanJsonString(text);
+            const data = JSON.parse(cleanText);
+            return { fileName, data };
+          } catch (e) {
+            console.error(`Erro ao carregar ./data/${fileName}:`, e);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(fetchPromises);
+
+        results.forEach(res => {
+          if (res && res.data) {
+            const sessionType = String(res.data.sessionType || '').toUpperCase();
+            if (sessionType === 'RACE' || sessionType === 'R') {
+              loadedSessions.push({ fileName: res.fileName, data: res.data });
+            } else {
+              ignoredFiles.push({ fileName: res.fileName, type: res.data.sessionType || 'Desconhecido' });
+            }
+          }
+        });
+
+        processAllSessions();
+        showStatus(`✅ Concluído: ${loadedSessions.length} corrida(s) carregada(s) automaticamente da pasta /data.`);
+
+      } catch (err) {
+        showStatus(`💡 Para leitura automática local, certifique-se de ter a pasta /data/index.json ou abra via servidor local (ex: Live Server).`, true);
+      }
+    }
+
+    function formatMs(ms) {
+      if (!ms || ms === 2147483647) return "--";
+      const totalSeconds = ms / 1000;
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = (totalSeconds % 60).toFixed(3);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function initCharts() {
+      const ctx1 = document.getElementById('lapsChart').getContext('2d');
+      lapsChart = new Chart(ctx1, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8' } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${formatMs(ctx.raw)}`
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
+            y: { 
+              ticks: { 
+                color: '#64748b',
+                callback: (val) => formatMs(val)
+              }, 
+              grid: { color: '#1e293b' } 
+            }
+          }
+        }
+      });
+
+      const ctx2 = document.getElementById('lapByLapChart').getContext('2d');
+      lapByLapChart = new Chart(ctx2, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8' } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label} (Volta ${ctx.label}): ${formatMs(ctx.raw)}`
+              }
+            }
+          },
+          scales: {
+            x: { 
+              title: { display: true, text: 'Número da Volta', color: '#64748b' },
+              ticks: { color: '#64748b' }, 
+              grid: { color: '#1e293b' } 
+            },
+            y: { 
+              title: { display: true, text: 'Tempo de Volta', color: '#64748b' },
+              ticks: { 
+                color: '#64748b',
+                callback: (val) => formatMs(val)
+              }, 
+              grid: { color: '#1e293b' } 
+            }
+          }
+        }
+      });
+    }
+
+    function handleFilesSelect(event) {
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
+
+      let filePromises = files.map(file => parseACCJson(file));
+
+      Promise.all(filePromises).then(results => {
+        results.forEach(res => {
+          if (res && res.data) {
+            const sessionType = String(res.data.sessionType || '').toUpperCase();
+            if (sessionType === 'RACE' || sessionType === 'R') {
+              loadedSessions.push({
+                fileName: res.fileName,
+                data: res.data
+              });
+            } else {
+              ignoredFiles.push({
+                fileName: res.fileName,
+                type: res.data.sessionType || 'Desconhecido'
+              });
+            }
+          }
+        });
+        processAllSessions();
+        showStatus(`📂 ${files.length} arquivo(s) processado(s) manualmente.`);
+      });
+    }
+
+    function parseACCJson(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const buffer = e.target.result;
+          let text = "";
+
+          try {
+            const decoder = new TextDecoder("utf-16le");
+            text = decoder.decode(buffer);
+            text = cleanJsonString(text);
+            const data = JSON.parse(text);
+            return resolve({ fileName: file.name, data });
+          } catch (err1) {
+            try {
+              const decoder = new TextDecoder("utf-8");
+              text = decoder.decode(buffer);
+              text = cleanJsonString(text);
+              const data = JSON.parse(text);
+              return resolve({ fileName: file.name, data });
+            } catch (err2) {
+              console.error("Erro ao analisar o arquivo JSON: " + file.name, err2);
+              alert(`O arquivo "${file.name}" não pôde ser lido como um JSON válido.`);
+              return resolve(null);
+            }
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function cleanJsonString(str) {
+      if (!str) return "";
+      return str
+        .replace(/^[\uFEFF\uFFFE]/, '')
+        .replace(/\0/g, '')
+        .trim();
+    }
+
+    function clearData() {
+      loadedSessions = [];
+      ignoredFiles = [];
+      driverHistoryChartGlobal = {};
+      activeDriversGlobal = [];
+      sortedDriversGlobal = [];
+      driversMapGlobal = {};
+      document.getElementById('fileInput').value = '';
+      showStatus("🧹 Dados limpos.");
+      processAllSessions();
+    }
+
+    function processAllSessions() {
+      const sessionsList = document.getElementById('sessionsList');
+      sessionsList.innerHTML = '';
+      if (loadedSessions.length === 0) {
+        sessionsList.innerHTML = '<span class="text-slate-500 italic">Nenhuma corrida válida carregada.</span>';
+      } else {
+        loadedSessions.forEach(s => {
+          const track = s.data.trackName || 'Pista N/A';
+          const badge = document.createElement('span');
+          badge.className = 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md font-mono';
+          badge.innerText = `${s.fileName} (Race - ${track})`;
+          sessionsList.appendChild(badge);
+        });
+      }
+
+      const ignoredContainer = document.getElementById('ignoredContainer');
+      const ignoredList = document.getElementById('ignoredList');
+      ignoredList.innerHTML = '';
+      if (ignoredFiles.length > 0) {
+        ignoredContainer.classList.remove('hidden');
+        ignoredFiles.forEach(f => {
+          const badge = document.createElement('span');
+          badge.className = 'bg-rose-950/40 text-rose-300 border border-rose-800/40 px-2 py-0.5 rounded font-mono';
+          badge.innerText = `${f.fileName} (${f.type})`;
+          ignoredList.appendChild(badge);
+        });
+      } else {
+        ignoredContainer.classList.add('hidden');
+      }
+
+      let driversMap = {}; 
+      let globalBestLap = 2147483647;
+      let globalTotalLaps = 0;
+
+      driverHistoryChartGlobal = {};
+
+      loadedSessions.forEach((sessionObj, sessionIdx) => {
+        const data = sessionObj.data;
+        const lines = data.sessionResult?.leaderBoardLines || [];
+        const laps = data.laps || [];
+
+        const carDriverMap = {};
+        lines.forEach(line => {
+          const driver = line.currentDriver || line.car?.drivers?.[0] || {};
+          const driverName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Piloto Desconhecido';
+          if (line.car?.carId !== undefined) {
+            carDriverMap[line.car.carId] = driverName;
+          }
+
+          if (!driversMap[driverName]) {
+            driversMap[driverName] = {
+              bestLap: 2147483647,
+              totalLaps: 0,
+              lapTimes: [],
+              sessions: new Set()
+            };
+          }
+        });
+
+        let bestInSessionForDriver = {};
+
+        laps.forEach(lap => {
+          if (!lap.isValidForBest) return;
+          const driverName = carDriverMap[lap.carId];
+          if (!driverName) return;
+
+          const time = lap.laptime;
+          globalTotalLaps++;
+
+          if (time < globalBestLap) globalBestLap = time;
+
+          if (time < driversMap[driverName].bestLap) {
+            driversMap[driverName].bestLap = time;
+          }
+          driversMap[driverName].totalLaps++;
+          driversMap[driverName].lapTimes.push(time);
+          driversMap[driverName].sessions.add(sessionIdx);
+
+          if (!bestInSessionForDriver[driverName] || time < bestInSessionForDriver[driverName]) {
+            bestInSessionForDriver[driverName] = time;
+          }
+        });
+
+        Object.keys(driversMap).forEach(driverName => {
+          if (!driverHistoryChartGlobal[driverName]) {
+            driverHistoryChartGlobal[driverName] = new Array(loadedSessions.length).fill(null);
+          }
+          if (bestInSessionForDriver[driverName]) {
+            driverHistoryChartGlobal[driverName][sessionIdx] = bestInSessionForDriver[driverName];
+          }
+        });
+      });
+
+      activeDriversGlobal = Object.keys(driversMap).filter(driverName => driversMap[driverName].totalLaps > 0);
+      driversMapGlobal = driversMap;
+
+      document.getElementById('totalFiles').innerText = loadedSessions.length;
+      document.getElementById('totalDrivers').innerText = activeDriversGlobal.length;
+      document.getElementById('totalLapsCount').innerText = globalTotalLaps;
+      document.getElementById('overallBestLap').innerText = formatMs(globalBestLap);
+
+      sortedDriversGlobal = activeDriversGlobal.sort((a, b) => driversMap[a].bestLap - driversMap[b].bestLap);
+
+      populateDriverDropdowns(sortedDriversGlobal);
+      renderLeaderboard();
+      updateEvolutionChart();
+      updateSessionSelectDropdown();
+    }
+
+    function renderLeaderboard() {
+      const leaderboardBody = document.getElementById('leaderboardBody');
+      leaderboardBody.innerHTML = '';
+
+      if (sortedDriversGlobal.length === 0) {
+        leaderboardBody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500">Nenhum arquivo de corrida com voltas válidas carregado.</td></tr>`;
+        return;
+      }
+
+      const selectedDriversWithIndex = getSelectedDriversWithSlotIndex();
+      const selectedMap = {};
+      selectedDriversWithIndex.forEach(item => {
+        selectedMap[item.name] = item.slotIndex;
+      });
+
+      sortedDriversGlobal.forEach((driverName, index) => {
+        const stats = driversMapGlobal[driverName];
+        const bestLapStr = formatMs(stats.bestLap);
+        const avgLapMs = stats.lapTimes.length ? Math.round(stats.lapTimes.reduce((a, b) => a + b, 0) / stats.lapTimes.length) : 0;
+        const avgLapStr = formatMs(avgLapMs);
+
+        const slotIdx = selectedMap[driverName];
+        const isSelected = slotIdx !== undefined;
+
+        const row = document.createElement('tr');
+        const defaultClass = "border-b border-slate-800/50 hover:bg-slate-800/30 transition";
+        const highlightClass = isSelected ? highlightClassMap[slotIdx] : "";
+
+        row.className = `${defaultClass} ${highlightClass}`;
+        row.innerHTML = `
+          <td class="py-3 px-4 font-bold text-sky-400">#${index + 1}</td>
+          <td class="py-3 px-4 font-medium ${isSelected ? 'text-white font-bold' : 'text-slate-300'}">
+            ${driverName} ${isSelected ? '📌' : ''}
+          </td>
+          <td class="py-3 px-4">${stats.sessions.size} / ${loadedSessions.length}</td>
+          <td class="py-3 px-4">${stats.totalLaps}</td>
+          <td class="py-3 px-4 font-mono font-semibold text-emerald-400">${bestLapStr}</td>
+          <td class="py-3 px-4 font-mono text-slate-400">${avgLapStr}</td>
+        `;
+        leaderboardBody.appendChild(row);
+      });
+    }
+
+    function populateDriverDropdowns(sortedDrivers) {
+      const selects = [
+        document.getElementById('driverSelect1'),
+        document.getElementById('driverSelect2'),
+        document.getElementById('driverSelect3'),
+        document.getElementById('driverSelect4')
+      ];
+
+      selects.forEach((select, i) => {
+        select.innerHTML = '<option value="">Nenhum</option>';
+        sortedDrivers.forEach(driver => {
+          const opt = document.createElement('option');
+          opt.value = driver;
+          opt.innerText = driver;
+          select.appendChild(opt);
+        });
+
+        const targetDefaultDriver = DEFAULT_DRIVERS[i];
+        if (targetDefaultDriver) {
+          const matchedDriver = sortedDrivers.find(d => d.trim().toLowerCase() === targetDefaultDriver.toLowerCase());
+          if (matchedDriver) {
+            select.value = matchedDriver;
+          } else {
+            select.value = "";
+          }
+        } else {
+          select.value = "";
+        }
+      });
+    }
+
+    function getSelectedDriversWithSlotIndex() {
+      const selects = [
+        document.getElementById('driverSelect1'),
+        document.getElementById('driverSelect2'),
+        document.getElementById('driverSelect3'),
+        document.getElementById('driverSelect4')
+      ];
+
+      const result = [];
+      selects.forEach((s, idx) => {
+        if (s.value) {
+          result.push({ name: s.value, slotIndex: idx, color: colorMap[idx] });
+        }
+      });
+      return result;
+    }
+
+    function getSelectedDrivers() {
+      return getSelectedDriversWithSlotIndex();
+    }
+
+    function onDriverFilterChange() {
+      renderLeaderboard();
+      updateEvolutionChart();
+      updateLapByLapChart();
+    }
+
+    function updateEvolutionChart() {
+      const sessionLabels = loadedSessions.map((s, idx) => `Corrida ${idx + 1}`);
+      const selectedDrivers = getSelectedDrivers().filter(d => driverHistoryChartGlobal[d.name]);
+
+      const datasets = selectedDrivers.map(d => ({
+        label: d.name,
+        data: driverHistoryChartGlobal[d.name],
+        borderColor: d.color,
+        backgroundColor: d.color,
+        spanGaps: true,
+        tension: 0.2
+      }));
+
+      lapsChart.data.labels = sessionLabels.length ? sessionLabels : ['Sem Corridas'];
+      lapsChart.data.datasets = datasets;
+      lapsChart.update();
+    }
+
+    function updateSessionSelectDropdown() {
+      const select = document.getElementById('sessionSelect');
+      select.innerHTML = '';
+
+      if (loadedSessions.length === 0) {
+        select.innerHTML = '<option value="">Nenhuma corrida carregada</option>';
+        lapByLapChart.data.labels = [];
+        lapByLapChart.data.datasets = [];
+        lapByLapChart.update();
+        return;
+      }
+
+      for (let idx = loadedSessions.length - 1; idx >= 0; idx--) {
+        const s = loadedSessions[idx];
+        const track = s.data.trackName || 'Pista N/A';
+        const option = document.createElement('option');
+        option.value = idx;
+        option.innerText = `Corrida ${idx + 1}: ${s.fileName} (${track})`;
+        select.appendChild(option);
+      }
+
+      updateLapByLapChart();
+    }
+
+    function updateLapByLapChart() {
+      const select = document.getElementById('sessionSelect');
+      const sessionIdx = parseInt(select.value);
+
+      if (isNaN(sessionIdx) || !loadedSessions[sessionIdx]) return;
+
+      const sessionObj = loadedSessions[sessionIdx];
+      const data = sessionObj.data;
+      const lines = data.sessionResult?.leaderBoardLines || [];
+      const laps = data.laps || [];
+
+      const selectedDrivers = getSelectedDrivers();
+      const selectedNamesSet = new Set(selectedDrivers.map(d => d.name));
+
+      const carDriverMap = {};
+      lines.forEach(line => {
+        const driver = line.currentDriver || line.car?.drivers?.[0] || {};
+        const driverName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Piloto Desconhecido';
+        if (line.car?.carId !== undefined) {
+          carDriverMap[line.car.carId] = driverName;
+        }
+      });
+
+      let driverLapsMap = {}; 
+      let maxLaps = 0;
+
+      laps.forEach(lap => {
+        const driverName = carDriverMap[lap.carId];
+        if (!driverName) return;
+
+        if (selectedNamesSet.size > 0 && !selectedNamesSet.has(driverName)) return;
+
+        if (!driverLapsMap[driverName]) {
+          driverLapsMap[driverName] = [];
+        }
+
+        if (lap.laptime && lap.laptime > 0) {
+          driverLapsMap[driverName].push(lap.laptime);
+          if (driverLapsMap[driverName].length > maxLaps) {
+            maxLaps = driverLapsMap[driverName].length;
+          }
+        }
+      });
+
+      const labels = Array.from({ length: maxLaps }, (_, i) => `V${i + 1}`);
+      const datasets = [];
+
+      Object.keys(driverLapsMap).forEach(driverName => {
+        if (driverLapsMap[driverName].length > 0) {
+          const driverConfig = selectedDrivers.find(d => d.name === driverName);
+          const color = driverConfig ? driverConfig.color : '#38bdf8';
+
+          datasets.push({
+            label: driverName,
+            data: driverLapsMap[driverName],
+            borderColor: color,
+            backgroundColor: color,
+            spanGaps: true,
+            tension: 0.15,
+            pointRadius: 3
+          });
+        }
+      });
+
+      lapByLapChart.data.labels = labels;
+      lapByLapChart.data.datasets = datasets;
+      lapByLapChart.update();
+    }
+
+    window.onload = function() {
+      initCharts();
+      loadFromDataFolder();
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+name: Gerar Indice JSON Automatico
+
+on:
+  push:
+    paths:
+      - 'data/*.json' # Executa apenas quando arquivos na pasta /data mudarem
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Baixar codigo do repositorio
+        uses: actions/checkout@v4
+
+      - name: Gerar index.json com lista de arquivos
+        run: |
+          cd data
+          # Lista todos os json da pasta exceto o index.json e formata em array JSON
+          ls -1 *.json 2>/dev/null | grep -v 'index.json' | jq -R . | jq -s . > index.json
+
+      - name: Salvar alterações no repositório
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add data/index.json
+          git diff-index --quiet HEAD || git commit -m "auto: atualiza index.json da pasta data"
+          git push
