@@ -227,7 +227,7 @@
       el.innerText = message;
     }
 
-    // Leitura Automática da pasta /data via index.json
+    // Leitura Automática da pasta /data via index.json com suporte UTF-16LE
     async function loadFromDataFolder() {
       showStatus("🔎 Procurando arquivos na pasta /data...");
       try {
@@ -247,9 +247,20 @@
           try {
             const res = await fetch(`./data/${fileName}`);
             if (!res.ok) return null;
-            const text = await res.text();
-            const cleanText = cleanJsonString(text);
-            const data = JSON.parse(cleanText);
+            
+            const buffer = await res.arrayBuffer();
+            let text = "";
+            
+            try {
+              const decoder = new TextDecoder("utf-16le");
+              text = cleanJsonString(decoder.decode(buffer));
+              if (!text.trim().startsWith('{')) throw new Error("Não é UTF-16");
+            } catch (e) {
+              const decoder = new TextDecoder("utf-8");
+              text = cleanJsonString(decoder.decode(buffer));
+            }
+
+            const data = JSON.parse(text);
             return { fileName, data };
           } catch (e) {
             console.error(`Erro ao carregar ./data/${fileName}:`, e);
@@ -274,7 +285,7 @@
         showStatus(`✅ Concluído: ${loadedSessions.length} corrida(s) carregada(s) automaticamente da pasta /data.`);
 
       } catch (err) {
-        showStatus(`💡 Para leitura automática local, certifique-se de ter a pasta /data/index.json ou abra via servidor local (ex: Live Server).`, true);
+        showStatus(`💡 Para leitura automática local, certifique-se de ter a pasta /data/index.json ou abra via servidor local.`, true);
       }
     }
 
