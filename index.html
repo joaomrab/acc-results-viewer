@@ -2,6 +2,11 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <!-- Controle de Cache para evitar a necessidade de revalidar via Ctrl+F5 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Assetto Mancos - Análise Histórica de Corridas</title>
   <!-- Tailwind CSS -->
@@ -205,11 +210,11 @@
     };
 
     const highlightClassMap = {
-	  0: 'bg-sky-500/30 border-l-8 border-l-sky-400 font-bold text-white',
-	  1: 'bg-amber-500/30 border-l-8 border-l-amber-400 font-bold text-white',
-	  2: 'bg-emerald-500/30 border-l-8 border-l-emerald-400 font-bold text-white',
-	  3: 'bg-purple-500/30 border-l-8 border-l-purple-400 font-bold text-white'
-	};
+      0: 'bg-sky-500/30 border-l-8 border-l-sky-400 font-bold text-white',
+      1: 'bg-amber-500/30 border-l-8 border-l-amber-400 font-bold text-white',
+      2: 'bg-emerald-500/30 border-l-8 border-l-emerald-400 font-bold text-white',
+      3: 'bg-purple-500/30 border-l-8 border-l-purple-400 font-bold text-white'
+    };
 
     const DEFAULT_DRIVERS = ["Erick Nogueira", "Leandro Sc", "João Marcos"];
 
@@ -224,11 +229,11 @@
       el.innerText = message;
     }
 
-    // Leitura Automática da pasta /data via index.json com suporte UTF-16LE
+    // Leitura Automática da pasta /data via index.json prevenindo cache
     async function loadFromDataFolder() {
       showStatus("🔎 Procurando arquivos na pasta /data...");
       try {
-        const response = await fetch('./data/index.json');
+        const response = await fetch(`./data/index.json?v=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) throw new Error("Não foi possível carregar o arquivo './data/index.json'.");
         
         const fileNames = await response.json();
@@ -242,7 +247,7 @@
 
         const fetchPromises = fileNames.map(async (fileName) => {
           try {
-            const res = await fetch(`./data/${fileName}`);
+            const res = await fetch(`./data/${fileName}?v=${Date.now()}`, { cache: 'no-store' });
             if (!res.ok) return null;
             
             const buffer = await res.arrayBuffer();
@@ -279,7 +284,7 @@
         });
 
         processAllSessions();
-        showStatus(`✅ Concluído: ${loadedSessions.length} corrida(s) carregada(s) automaticamente da pasta /data.`);
+        showStatus(`✅ Concluído: ${loadedSessions.length} corrida(s) carregada(s).`);
 
       } catch (err) {
         showStatus(`💡 Para leitura automática local, certifique-se de ter a pasta /data/index.json ou abra via servidor local.`, true);
