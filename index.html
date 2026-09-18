@@ -578,7 +578,7 @@
       Array.from(tracks).sort().forEach(track => {
         const opt = document.createElement('option');
         opt.value = track;
-        opt.innerText = track;
+        opt.innerText = String(track).charAt(0).toUpperCase() + String(track).slice(1);
         trackSelect.appendChild(opt);
       });
 
