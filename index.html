@@ -113,7 +113,7 @@
       <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h3 class="text-base font-bold text-sky-400 flex items-center gap-2">
-            🎯 Filtro de Mancos
+            🎯 Filtro
           </h3>
           <p class="text-xs text-slate-400 mt-0.5">Selecione até 4 mancos para filtrar simultaneamente os gráficos</p>
         </div>
@@ -150,10 +150,10 @@
     <section class="bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-sm">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
         <h2 class="text-xl font-bold text-slate-200 flex items-center gap-2">
-          🏆 Ranking Geral / Melhores Voltas e Parciais
+          🏆 Ranking Geral / Melhores Voltas
         </h2>
         <span class="text-xs text-amber-400 bg-amber-950/40 border border-amber-800/50 px-3 py-1 rounded-full w-fit">
-          ⚠️ Requisitos: ≥ 5 voltas totais E ≥ 3 voltas na sessão
+          ⚠️ Requisitos: ≥ 5 voltas totais E ≥ 3 voltas na corrida
         </span>
       </div>
       <div class="overflow-x-auto">
@@ -164,9 +164,9 @@
               <th class="py-3 px-3">Manco</th>
               <th class="py-3 px-3">Participação</th>
               <th class="py-3 px-3">Voltas</th>
-              <th class="py-3 px-3 text-sky-400">Setor 1 (S1)</th>
-              <th class="py-3 px-3 text-sky-400">Setor 2 (S2)</th>
-              <th class="py-3 px-3 text-sky-400">Setor 3 (S3)</th>
+              <th class="py-3 px-3 text-sky-400">Setor 1</th>
+              <th class="py-3 px-3 text-sky-400">Setor 2</th>
+              <th class="py-3 px-3 text-sky-400">Setor 3</th>
               <th class="py-3 px-3">Melhor Volta</th>
               <th class="py-3 px-3">Média Volta</th>
             </tr>
@@ -185,12 +185,12 @@
       </div>
     </section>
 
-    <!-- Gráfico 1: Evolução da Melhor Volta por Sessão -->
+    <!-- Gráfico 1: Evolução da Melhor Volta por Sessão (Sem Agrupamento Diário / Sem Média) -->
     <section class="bg-slate-900/80 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-sm space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <h2 class="text-xl font-bold text-slate-200">📈 Evolução dos Tempos de Corrida Por Sessão</h2>
-          <p class="text-xs text-slate-400 mt-1">Comparativo da melhor volta considerando apenas corridas em que os pilotos do filtro participaram juntos</p>
+          <h2 class="text-xl font-bold text-slate-200">📈 Evolução dos Tempos de Corrida</h2>
+          <p class="text-xs text-slate-400 mt-1">Evolução cronológica das melhores voltas por sessão de corrida individual</p>
         </div>
       </div>
       <div class="h-80">
@@ -202,7 +202,7 @@
     <section class="bg-slate-900/80 backdrop-blur-md p-6 rounded-2xl border border-slate-800 shadow-sm space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <h2 class="text-xl font-bold text-slate-200">⏱️ Análise Ritmo Volta a Volta na Sessão</h2>
+          <h2 class="text-xl font-bold text-slate-200">⏱️ Análise Ritmo Volta a Volta</h2>
           <p class="text-xs text-slate-400 mt-1">Tempo total de cada volta nas sessões em que os pilotos do filtro participaram juntos</p>
         </div>
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto min-w-0">
@@ -239,6 +239,7 @@
     let loadedSessions = [];
     let ignoredFiles = [];
     let driverHistoryChartGlobal = {};
+    let evolutionSessionLabelsGlobal = [];
     let activeDriversGlobal = [];
     let sortedDriversGlobal = [];
     let driversMapGlobal = {};
@@ -263,6 +264,7 @@
 
     function showStatus(message, isError = false) {
       const el = document.getElementById('statusMessage');
+      if (!el) return;
       el.classList.remove('hidden', 'bg-emerald-950/50', 'border-emerald-800', 'text-emerald-300', 'bg-rose-950/50', 'border-rose-800', 'text-rose-300');
       if (isError) {
         el.classList.add('bg-rose-950/50', 'border-rose-800', 'text-rose-300');
@@ -272,13 +274,12 @@
       el.innerText = message;
     }
 
-    // Extração padronizada yymmdd dos 6 primeiros dígitos do nome do arquivo
     function extractDateLabel(fileName) {
-      const cleanName = fileName.replace(/^.*[\\\/]/, ''); // Remove caminhos se houver
-      if (/^\d{6}/.test(cleanName)) {
-        const yy = cleanName.substring(0, 2);
-        const mm = cleanName.substring(2, 4);
-        const dd = cleanName.substring(4, 6);
+      if (!fileName) return "Data N/A";
+      const cleanName = fileName.replace(/^.*[\\\/]/, '');
+      const match = cleanName.match(/^(\d{2})(\d{2})(\d{2})/);
+      if (match) {
+        const [, yy, mm, dd] = match;
         return `${dd}/${mm}`;
       }
       return cleanName.substring(0, 10);
@@ -347,7 +348,7 @@
     }
 
     function formatMs(ms) {
-      if (!ms || ms === 2147483647) return "--";
+      if (!ms || ms === 2147483647 || isNaN(ms)) return "--";
       const totalSeconds = ms / 1000;
       const mins = Math.floor(totalSeconds / 60);
       const secs = (totalSeconds % 60).toFixed(3);
@@ -366,13 +367,13 @@
             legend: { labels: { color: '#94a3b8' } },
             tooltip: {
               callbacks: {
-                label: (ctx) => `${ctx.dataset.label}: ${formatMs(ctx.raw)}`
+                label: (ctx) => `${ctx.dataset.label} (Melhor da Sessão): ${formatMs(ctx.raw)}`
               }
             }
           },
           scales: {
             x: { 
-              title: { display: true, text: 'Data da Sessão (dd/mm)', color: '#64748b' },
+              title: { display: true, text: 'Sessão de Corrida', color: '#64748b' },
               ticks: { color: '#64748b' }, 
               grid: { color: '#1e293b' } 
             },
@@ -423,7 +424,7 @@
       const ctx3 = document.getElementById('splitsChart').getContext('2d');
       splitsChart = new Chart(ctx3, {
         type: 'line',
-        data: { labels: ['Setor 1 (S1)', 'Setor 2 (S2)', 'Setor 3 (S3)'], datasets: [] },
+        data: { labels: ['Setor 1', 'Setor 2', 'Setor 3'], datasets: [] },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -529,11 +530,13 @@
       loadedSessions = [];
       ignoredFiles = [];
       driverHistoryChartGlobal = {};
+      evolutionSessionLabelsGlobal = [];
       activeDriversGlobal = [];
       sortedDriversGlobal = [];
       driversMapGlobal = {};
       filteredSessionsGlobal = [];
-      document.getElementById('fileInput').value = '';
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) fileInput.value = '';
       showStatus("🧹 Dados limpos.");
       updateTrackDropdown();
       processAllSessions();
@@ -541,6 +544,7 @@
 
     function updateTrackDropdown() {
       const trackSelect = document.getElementById('trackFilterSelect');
+      if (!trackSelect) return;
       const currentValue = trackSelect.value;
       trackSelect.innerHTML = '';
 
@@ -582,46 +586,51 @@
     }
 
     function processAllSessions() {
-      const selectedTrack = document.getElementById('trackFilterSelect').value;
+      const trackSelect = document.getElementById('trackFilterSelect');
+      const selectedTrack = trackSelect ? trackSelect.value : "";
 
       filteredSessionsGlobal = loadedSessions.filter(s => {
         return s.data.trackName === selectedTrack;
       });
 
       const sessionsList = document.getElementById('sessionsList');
-      sessionsList.innerHTML = '';
-      if (filteredSessionsGlobal.length === 0) {
-        sessionsList.innerHTML = '<span class="text-slate-500 italic">Nenhuma corrida válida para esta seleção.</span>';
-      } else {
-        filteredSessionsGlobal.forEach(s => {
-          const track = s.data.trackName || 'Pista N/A';
-          const badge = document.createElement('span');
-          badge.className = 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md font-mono';
-          badge.innerText = `${s.fileName} (Race - ${track})`;
-          sessionsList.appendChild(badge);
-        });
+      if (sessionsList) {
+        sessionsList.innerHTML = '';
+        if (filteredSessionsGlobal.length === 0) {
+          sessionsList.innerHTML = '<span class="text-slate-500 italic">Nenhuma corrida válida para esta seleção.</span>';
+        } else {
+          filteredSessionsGlobal.forEach(s => {
+            const track = s.data.trackName || 'Pista N/A';
+            const badge = document.createElement('span');
+            badge.className = 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md font-mono';
+            badge.innerText = `${s.fileName} (Race - ${track})`;
+            sessionsList.appendChild(badge);
+          });
+        }
       }
 
       const ignoredContainer = document.getElementById('ignoredContainer');
       const ignoredList = document.getElementById('ignoredList');
-      ignoredList.innerHTML = '';
-      if (ignoredFiles.length > 0) {
-        ignoredContainer.classList.remove('hidden');
-        ignoredFiles.forEach(f => {
-          const badge = document.createElement('span');
-          badge.className = 'bg-rose-950/40 text-rose-300 border border-rose-800/40 px-2 py-0.5 rounded font-mono';
-          badge.innerText = `${f.fileName} (${f.type})`;
-          ignoredList.appendChild(badge);
-        });
-      } else {
-        ignoredContainer.classList.add('hidden');
+      if (ignoredList && ignoredContainer) {
+        ignoredList.innerHTML = '';
+        if (ignoredFiles.length > 0) {
+          ignoredContainer.classList.remove('hidden');
+          ignoredFiles.forEach(f => {
+            const badge = document.createElement('span');
+            badge.className = 'bg-rose-950/40 text-rose-300 border border-rose-800/40 px-2 py-0.5 rounded font-mono';
+            badge.innerText = `${f.fileName} (${f.type})`;
+            ignoredList.appendChild(badge);
+          });
+        } else {
+          ignoredContainer.classList.add('hidden');
+        }
       }
 
       let driversMap = {}; 
       let globalBestLap = 2147483647;
       let globalTotalLaps = 0;
 
-      driverHistoryChartGlobal = {};
+      let sessionBestLapsPerSession = [];
 
       filteredSessionsGlobal.forEach((sessionObj, sessionIdx) => {
         const data = sessionObj.data;
@@ -689,23 +698,32 @@
           }
         });
 
-        Object.keys(driversMap).forEach(driverName => {
-          if (!driverHistoryChartGlobal[driverName]) {
-            driverHistoryChartGlobal[driverName] = new Array(filteredSessionsGlobal.length).fill(null);
-          }
-          if (bestInSessionForDriver[driverName]) {
-            driverHistoryChartGlobal[driverName][sessionIdx] = bestInSessionForDriver[driverName];
-          }
-        });
+        sessionBestLapsPerSession[sessionIdx] = bestInSessionForDriver;
       });
 
       activeDriversGlobal = Object.keys(driversMap).filter(driverName => driversMap[driverName].totalLaps > 0);
       driversMapGlobal = driversMap;
 
-      document.getElementById('totalFiles').innerText = filteredSessionsGlobal.length;
-      document.getElementById('totalDrivers').innerText = activeDriversGlobal.length;
-      document.getElementById('totalLapsCount').innerText = globalTotalLaps;
-      document.getElementById('overallBestLap').innerText = formatMs(globalBestLap);
+      // Exibe apenas a data no formato dd/mm no eixo X
+      evolutionSessionLabelsGlobal = filteredSessionsGlobal.map(s => extractDateLabel(s.fileName));
+
+      driverHistoryChartGlobal = {};
+      activeDriversGlobal.forEach(driverName => {
+        driverHistoryChartGlobal[driverName] = filteredSessionsGlobal.map((sessionObj, sessionIdx) => {
+          const bestInSession = sessionBestLapsPerSession[sessionIdx] ? sessionBestLapsPerSession[sessionIdx][driverName] : undefined;
+          return (bestInSession !== undefined && bestInSession < 2147483647) ? bestInSession : null;
+        });
+      });
+
+      const totalFilesEl = document.getElementById('totalFiles');
+      const totalDriversEl = document.getElementById('totalDrivers');
+      const totalLapsCountEl = document.getElementById('totalLapsCount');
+      const overallBestLapEl = document.getElementById('overallBestLap');
+
+      if (totalFilesEl) totalFilesEl.innerText = filteredSessionsGlobal.length;
+      if (totalDriversEl) totalDriversEl.innerText = activeDriversGlobal.length;
+      if (totalLapsCountEl) totalLapsCountEl.innerText = globalTotalLaps;
+      if (overallBestLapEl) overallBestLapEl.innerText = formatMs(globalBestLap);
 
       sortedDriversGlobal = activeDriversGlobal
         .filter(driverName => {
@@ -727,6 +745,7 @@
 
     function renderLeaderboard() {
       const leaderboardBody = document.getElementById('leaderboardBody');
+      if (!leaderboardBody) return;
       leaderboardBody.innerHTML = '';
 
       if (sortedDriversGlobal.length === 0) {
@@ -750,7 +769,6 @@
         selectedMap[item.name] = item.slotIndex;
       });
 
-      // Filtra para exibir apenas os selecionados se não estiver expandido
       const driversToDisplay = sortedDriversGlobal.filter(driverName => {
         if (isLeaderboardExpanded) return true;
         return selectedMap[driverName] !== undefined;
@@ -804,7 +822,6 @@
         leaderboardBody.appendChild(row);
       });
 
-      const hiddenCount = sortedDriversGlobal.length - driversToDisplay.length;
       const toggleRow = document.createElement('tr');
       const btnText = isLeaderboardExpanded 
         ? "Exibir Apenas Mancos Selecionados" 
@@ -829,6 +846,7 @@
       ];
 
       selects.forEach((select, i) => {
+        if (!select) return;
         const prevValue = select.value;
         select.innerHTML = '<option value="">Nenhum</option>';
         allActiveDrivers.forEach(driver => {
@@ -862,7 +880,7 @@
 
       const result = [];
       selects.forEach((s, idx) => {
-        if (s.value) {
+        if (s && s.value) {
           result.push({ name: s.value, slotIndex: idx, color: colorMap[idx] });
         }
       });
@@ -921,35 +939,29 @@
     }
 
     function updateEvolutionChart() {
+      if (!lapsChart) return;
       const selectedDrivers = getSelectedDrivers();
-      const validSessionIndices = getValidSessionIndicesForCurrentFilter();
-
-      const sessionLabels = validSessionIndices.map((origIdx) => {
-        const sObj = filteredSessionsGlobal[origIdx];
-        return sObj ? extractDateLabel(sObj.fileName) : `Sessão ${origIdx + 1}`;
-      });
 
       const datasets = selectedDrivers.map(d => {
         const fullHistory = driverHistoryChartGlobal[d.name] || [];
-        const filteredData = validSessionIndices.map(origIdx => fullHistory[origIdx] !== undefined ? fullHistory[origIdx] : null);
-
         return {
           label: d.name,
-          data: filteredData,
+          data: fullHistory,
           borderColor: d.color,
           backgroundColor: d.color,
-          spanGaps: false,
+          spanGaps: true,
           tension: 0.2
         };
       });
 
-      lapsChart.data.labels = sessionLabels.length ? sessionLabels : ['Nenhuma corrida em comum'];
+      lapsChart.data.labels = evolutionSessionLabelsGlobal.length ? evolutionSessionLabelsGlobal : ['Nenhuma corrida registrada'];
       lapsChart.data.datasets = datasets;
       lapsChart.update();
     }
 
     function updateSessionSelectDropdown() {
       const select = document.getElementById('sessionSelect');
+      if (!select) return;
       const prevSelectedValue = select.value;
       select.innerHTML = '';
 
@@ -957,12 +969,16 @@
 
       if (validSessionIndices.length === 0 || filteredSessionsGlobal.length === 0) {
         select.innerHTML = '<option value="">Nenhuma corrida em comum</option>';
-        lapByLapChart.data.labels = [];
-        lapByLapChart.data.datasets = [];
-        lapByLapChart.update();
-        splitsChart.data.labels = [];
-        splitsChart.data.datasets = [];
-        splitsChart.update();
+        if (lapByLapChart) {
+          lapByLapChart.data.labels = [];
+          lapByLapChart.data.datasets = [];
+          lapByLapChart.update();
+        }
+        if (splitsChart) {
+          splitsChart.data.labels = [];
+          splitsChart.data.datasets = [];
+          splitsChart.update();
+        }
         return;
       }
 
@@ -991,8 +1007,9 @@
     }
 
     function updateLapByLapChart() {
+      if (!lapByLapChart) return;
       const select = document.getElementById('sessionSelect');
-      const sessionIdx = parseInt(select.value);
+      const sessionIdx = select ? parseInt(select.value) : NaN;
 
       if (isNaN(sessionIdx) || !filteredSessionsGlobal[sessionIdx]) {
         lapByLapChart.data.labels = [];
@@ -1065,11 +1082,12 @@
     }
 
     function updateSplitsChart() {
+      if (!splitsChart) return;
       const select = document.getElementById('sessionSelect');
-      const sessionIdx = parseInt(select.value);
+      const sessionIdx = select ? parseInt(select.value) : NaN;
 
       if (isNaN(sessionIdx) || !filteredSessionsGlobal[sessionIdx]) {
-        splitsChart.data.labels = ['Setor 1 (S1)', 'Setor 2 (S2)', 'Setor 3 (S3)'];
+        splitsChart.data.labels = ['Setor 1', 'Setor 2', 'Setor 3'];
         splitsChart.data.datasets = [];
         splitsChart.update();
         return;
@@ -1135,7 +1153,7 @@
         });
       });
 
-      splitsChart.data.labels = ['Setor 1 (S1)', 'Setor 2 (S2)', 'Setor 3 (S3)'];
+      splitsChart.data.labels = ['Setor 1', 'Setor 2', 'Setor 3'];
       splitsChart.data.datasets = datasets;
       splitsChart.update();
     }
