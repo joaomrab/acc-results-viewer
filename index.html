@@ -110,9 +110,21 @@
         <h2 class="text-xl font-bold text-slate-200 flex items-center gap-2">
           🏆 Ranking Geral
         </h2>
-        <span class="text-xs text-amber-400 bg-amber-950/40 border border-amber-800/50 px-3 py-1 rounded-full w-fit">
-          ⚠️ Mínimo: 5 voltas totais e 3 voltas na corrida
-        </span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs text-amber-400 bg-amber-950/40 border border-amber-800/50 px-3 py-1 rounded-full w-fit">
+            ⚠️ Mínimo: 5 voltas totais e 3 voltas na corrida
+          </span>
+          <div class="flex items-center gap-2">
+            <label for="raceCountFilterSelect" class="text-[10px] uppercase font-semibold text-slate-400 shrink-0">Corridas</label>
+            <select id="raceCountFilterSelect" onchange="onRaceCountFilterChange()" class="bg-slate-950 text-slate-200 font-medium border border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-sky-500">
+              <option value="10" selected>Últimas 10 corridas</option>
+              <option value="15">Últimas 15 corridas</option>
+              <option value="20">Últimas 20 corridas</option>
+              <option value="30">Últimas 30 corridas</option>
+              <option value="all">Todas as corridas</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
@@ -291,6 +303,19 @@
         return `${dd}/${mm}`;
       }
       return cleanName.substring(0, 10);
+    }
+
+    // Retorna um valor numérico ordenável (AAAAMMDD) com base no prefixo de data do nome do arquivo.
+    // Arquivos sem data reconhecível recebem 0 e ficam no início da ordem cronológica.
+    function extractDateSortValue(fileName) {
+      if (!fileName) return 0;
+      const cleanName = fileName.replace(/^.*[\\\/]/, '');
+      const match = cleanName.match(/^(\d{2})(\d{2})(\d{2})/);
+      if (match) {
+        const [, yy, mm, dd] = match;
+        return parseInt(`${yy}${mm}${dd}`, 10);
+      }
+      return 0;
     }
 
     async function loadFromDataFolder() {
@@ -593,6 +618,11 @@
       processAllSessions();
     }
 
+    function onRaceCountFilterChange() {
+      isLeaderboardExpanded = false;
+      processAllSessions();
+    }
+
     function processAllSessions() {
       const trackSelect = document.getElementById('trackFilterSelect');
       const selectedTrack = trackSelect ? trackSelect.value : "";
@@ -601,13 +631,27 @@
         return s.data.trackName === selectedTrack;
       });
 
+      // Ordena cronologicamente (mais antiga -> mais recente) com base na data do nome do arquivo.
+      filteredSessionsGlobal.sort((a, b) => extractDateSortValue(a.fileName) - extractDateSortValue(b.fileName));
+
+      // Aplica o filtro de quantidade de corridas (10 últimas ou todas). Padrão: 10 últimas.
+      const raceCountSelect = document.getElementById('raceCountFilterSelect');
+      const raceCountMode = raceCountSelect ? raceCountSelect.value : '10';
+      if (raceCountMode !== 'all') {
+        const raceCountLimit = parseInt(raceCountMode, 10) || 10;
+        if (filteredSessionsGlobal.length > raceCountLimit) {
+          filteredSessionsGlobal = filteredSessionsGlobal.slice(-raceCountLimit);
+        }
+      }
+
       const sessionsList = document.getElementById('sessionsList');
       if (sessionsList) {
         sessionsList.innerHTML = '';
         if (filteredSessionsGlobal.length === 0) {
           sessionsList.innerHTML = '<span class="text-slate-500 italic">Nenhuma corrida válida para esta seleção.</span>';
         } else {
-          filteredSessionsGlobal.forEach(s => {
+          // Exibe da mais recente para a mais antiga (ordem inversa à cronológica usada nos gráficos).
+          [...filteredSessionsGlobal].reverse().forEach(s => {
             const track = s.data.trackName || 'Pista N/A';
             const badge = document.createElement('span');
             badge.className = 'bg-slate-800 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md font-mono';
@@ -907,43 +951,9 @@
     }
 
     function getValidSessionIndicesForCurrentFilter() {
-      const selectedDrivers = getSelectedDrivers();
-      const selectedNames = selectedDrivers.map(d => d.name);
-
-      const validSessionIndices = [];
-      filteredSessionsGlobal.forEach((sessionObj, sessionIdx) => {
-        if (selectedNames.length === 0) {
-          validSessionIndices.push(sessionIdx);
-          return;
-        }
-
-        const data = sessionObj.data;
-        const lines = data.sessionResult?.leaderBoardLines || [];
-        const laps = data.laps || [];
-
-        const carDriverMap = {};
-        lines.forEach(line => {
-          const driver = line.currentDriver || line.car?.drivers?.[0] || {};
-          const driverName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
-          if (line.car?.carId !== undefined) {
-            carDriverMap[line.car.carId] = driverName;
-          }
-        });
-
-        const driversInThisSession = new Set();
-        laps.forEach(lap => {
-          if (!lap.isValidForBest) return;
-          const dName = carDriverMap[lap.carId];
-          if (dName) driversInThisSession.add(dName);
-        });
-
-        const allParticipated = selectedNames.every(name => driversInThisSession.has(name));
-        if (allParticipated) {
-          validSessionIndices.push(sessionIdx);
-        }
-      });
-
-      return validSessionIndices;
+      // Retorna todas as sessões da pista/filtro de corridas atual, sem exigir
+      // que os mancos selecionados tenham participado da sessão.
+      return filteredSessionsGlobal.map((_, idx) => idx);
     }
 
     function updateEvolutionChart() {
@@ -976,7 +986,7 @@
       const validSessionIndices = getValidSessionIndicesForCurrentFilter();
 
       if (validSessionIndices.length === 0 || filteredSessionsGlobal.length === 0) {
-        select.innerHTML = '<option value="">Nenhuma corrida em comum</option>';
+        select.innerHTML = '<option value="">Nenhuma corrida disponível</option>';
         if (lapByLapChart) {
           lapByLapChart.data.labels = [];
           lapByLapChart.data.datasets = [];
